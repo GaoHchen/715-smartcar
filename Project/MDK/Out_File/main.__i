@@ -1,0 +1,1 @@
+"..\USER\src\main.c" LARGE OMF2 OPTIMIZE (8,SPEED) INCDIR(..\..\Libraries\libraries;..\..\Libraries\seekfree_libraries;..\..\Libraries\seekfree_peripheral;..\USER\inc;..\USER\src;..\CODE) PRINT(.\Out_File\main.lst) TABS (2) OBJECT(.\Out_File\main.obj)

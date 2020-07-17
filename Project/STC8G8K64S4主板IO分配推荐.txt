@@ -1,0 +1,47 @@
+所有的输入设备建议加一个二极管
+
+编码器2个
+DIR  P50
+LSB CTIM0_P34
+
+DIR  P51
+LSB CTIM3_P04
+
+
+ICM20602:
+SPC	P25
+SDI	P23
+SDO	P24
+CS	P27
+
+
+SPI屏幕引脚:
+SCL	P25
+SDA	P23
+RST	P32
+DC	P33
+CS	P35
+BL	P36
+
+2个电机:
+P00
+P01
+
+P22
+P26
+
+
+线性CCD（第一个）:
+CLK: P20
+SI:	 P21
+AO:P05
+
+线性CCD（第二个）:
+CLK: P20
+SI:	 P21
+AO:P06
+
+
+
+
+

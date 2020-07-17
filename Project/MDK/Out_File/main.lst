@@ -1,0 +1,828 @@
+C51 COMPILER V9.57.0.0   MAIN                                                              07/17/2020 10:30:34 PAGE 1   
+
+
+C51 COMPILER V9.57.0.0, COMPILATION OF MODULE MAIN
+OBJECT MODULE PLACED IN .\Out_File\main.obj
+COMPILER INVOKED BY: C:\Keil_v5\C51\BIN\C51.EXE ..\USER\src\main.c LARGE OMF2 OPTIMIZE(8,SPEED) INCDIR(..\..\Libraries\l
+                    -ibraries;..\..\Libraries\seekfree_libraries;..\..\Libraries\seekfree_peripheral;..\USER\inc;..\USER\src;..\CODE) PRINT(.
+                    -\Out_File\main.lst) TABS(2) OBJECT(.\Out_File\main.obj)
+
+line level    source
+
+   1          /*********************************************************************************************************
+             -************
+   2          
+   3           * @file          main
+   4           * @company       ³É¶¼Öð·É¿Æ¼¼ÓÐÏÞ¹«Ë¾
+   5           * @author        Öð·É¿Æ¼¼(QQ790875685)
+   6           * @version       ²é¿´docÄÚversionÎÄ¼þ °æ±¾ËµÃ÷
+   7           * @Software    MDK5.27
+   8           * @Target core   STC8G8K64S4
+   9           * @Taobao      https://seekfree.taobao.com/
+  10           * @date          2020-4-14
+  11           *********************************************************************************************************
+             -***********/
+  12          
+  13          #include "headfile.h"
+  14          #define PI  3.14
+  15          
+  16          #define  down     P43
+  17          #define  right    P42
+  18          #define  left     P37
+  19          #define  mid      P36
+  20          #define  up       P41
+  21          
+  22          #define SPEEDL_PIN   CTIM3_P04
+  23          #define SPEEDR_PIN   CTIM4_P06
+  24          
+  25          float K1 =0.15; 
+  26          float angle = 0, angle_dot;   
+  27          float Accel_Y,Accel_X,Accel_Z,Gyro_Y,Gyro_Z;
+  28          float Gyro_Balance,Angle_Balance,Gyro_Turn,Acceleration_Z;
+  29          float AngleControlOut,GyroControlOut=0;
+  30          float Gyro_error=0;
+  31          float Last_error=0;
+  32          float Gyro_Ingter;
+  33          float Prev_error=0;
+  34          //Ö±Á¢²ÎÊý
+  35          float Angle_Kp=0,Angle_Kd=0;
+  36          float Gyro_Kp=-0.4,Gyro_Kd=-0.03,Gyro_Ki=0;
+  37          //
+  38          float balance_Kp=0,balance_Kd=0;  //-2.6 -0.15 
+  39          float balanceControlOut=0;
+  40          //
+  41          //ËÙ¶È»·³õÊ¼»¯²ÎÊý  
+  42          int16 temp_l=0,temp_r=0;
+  43          int32 g_nLeftSpeed = 0,g_nRighSpeed = 0;
+  44          float g_fLeftRealSpeed;
+  45          float g_fRighRealSpeed;
+  46          float Ratio_Encoder_Left = 157/(1658*0.1);// ×óÂÖËÙ¶È=counter*×óÂÖÖÜ³¤(mm)/(×óÂÖ×ªÒ»È¦¶ÔÓ¦µÄÂö³åÊý*³ÌÐòÖÜÆ
+             -Ú)
+  47          float Ratio_Encoder_Righ = 157/(1658*0.1);//  ÓÒÂÖËÙ¶È=counter*ÓÒÂÖÖÜ³¤(mm)/(ÓÒÂÖ×ªÒ»È¦¶ÔÓ¦µÄÂö³åÊý*³ÌÐòÖÜ
+             -ÆÚ)
+  48          float g_fRealSpeed = 0;
+  49          float g_fLeftRealSpeed;
+C51 COMPILER V9.57.0.0   MAIN                                                              07/17/2020 10:30:34 PAGE 2   
+
+  50          float g_fRighRealSpeed;
+  51          float g_fSpeedFilter = 0;
+  52          float g_fSpeedError;
+  53          float g_fSpeedErrorTemp[5] = {0};
+  54          int32 g_fExpectSpeed = 400;
+  55          float fSpeedErrorInteg = 0;
+  56          float g_fSpeedControlOutOld = 0,g_fSpeedControlOutNew = 0;
+  57          float g_fSpeedControlOut = 0;
+  58          uint8 Flag_SpeedControl = 0;
+  59          int32  g_fSpeedF;
+  60          float g_fSpeed=0;
+  61          //Çå»ªËÙ¶È¿ØÖÆ»·
+  62          float g_speedControl_P = 50;//´¿PËÙ¶È¿ØÖÆ
+  63          float g_speedControl_I = 0; 
+  64          float g_speedControl_D = 0;//0.3;
+  65          float g_PWMOut=0;
+  66          int16  speedl_power;
+  67          int16  speedr_power;
+  68          int32 g_nLeftPWM, g_nRighPWM;
+  69          uint8 GP[1];
+  70          uint8 GD[1];
+  71          uint8 AP[1];
+  72          uint8 AD[1];
+  73          uint8 DP[1];
+  74          uint8 DD[1];
+  75          //·½Ïò»·³õÊ¼»¯²ÎÊý
+  76          uint16 zuoAD[10],youAD[10],zhongAD[10],g_ValueOfAD[10];
+  77          uint16  zuozong_last[2]={0},youzong_last[2]={0}, zuozong_shu_last[2]={0},youzong_shu_last[2]={0},zhongzong
+             -_last[2]={0};
+  78          uint16 temp,t,zuoADmax,youADmax,dangqian_chazhi,dangqian_chazhi_shu,you_shuzong,zuo_shuzong;
+  79          int16 zuozong,youzong,zhongzong,KEE,shu_KE;
+  80          uint8 i,c,Direction_falg=0;
+  81          int16 g_fLeftVoltageSigma = 0;
+  82          int16 g_fRightVoltageSigma = 0;
+  83          uint16 D_last,D_last2,index,pid_Ki=1;
+  84          uint16 dangqian_he;
+  85          int16 fLeftRightAdd,fLeftRightSub,fLeftRightSub_last;
+  86          int16   KEE,KE,KE_LAST=0,shu_KE,shu_KE_last,KEEE;
+  87          uint16 canshu[10]={0} ,D_1,D_2,D_3,D_now ;
+  88          int16 fValue,fValue_last;
+  89          int16 nLeft_last,nRight_last,zuo_shuzong_last,you_shuzong_last;
+  90          //·½Ïò»·PID
+  91          float  DIR_CONTROL_P=0;
+  92          float  DIR_CONTROL_D=0;
+  93          int16 g_fDirectionControlOut=0;
+  94          uint16 a[];
+  95          /**
+  96          
+  97            * @example  ÁÑ¿ª´úÂë
+  98            *
+  99            * @date     2020/6/25 ÐÇÆÚËÄ
+ 100          */
+ 101          void AD_get()
+ 102          {
+ 103   1           for(i=0;i<5;i++)
+ 104   1           {
+ 105   2               zuoAD[i]=adc_once(ADC_P12, ADC_10BIT);
+ 106   2               youAD[i]=adc_once(ADC_P11, ADC_10BIT);
+ 107   2           }
+ 108   1        zuozong=(zuoAD[4]+zuoAD[3]+zuoAD[2]+zuoAD[1]+zuoAD[0])/5;
+ 109   1        
+ 110   1        youzong=(youAD[4]+youAD[3]+youAD[2]+youAD[1]+youAD[0])/5;
+C51 COMPILER V9.57.0.0   MAIN                                                              07/17/2020 10:30:34 PAGE 3   
+
+ 111   1      
+ 112   1      }
+ 113          void AD_chuli(void)
+ 114          {
+ 115   1        zuozong=110+((zuozong-zuoADmax)*200)/zuoADmax;       //¹éÒ»»¯
+ 116   1        youzong=110+((youzong-youADmax)*200)/youADmax;
+ 117   1        
+ 118   1        if(zuozong>=800) zuozong=800;
+ 119   1        if(youzong>=800) youzong=800;
+ 120   1        if(youzong<=0) youzong=0;
+ 121   1        if(zuozong<=0) zuozong=0;
+ 122   1        
+ 123   1        if(youzong<zuozong)
+ 124   1        {  //ÅÐ¶Ï×óÓÒ·½Ïò                          
+ 125   2          // dangqian_chazhi=(( uint16)(zuozong-youzong)*200)/(zuozong+youzong);          //²î±ÈºÍ        
+ 126   2          dangqian_chazhi=zuozong-youzong;
+ 127   2          c=0;//³µÔÚÅÜµÀÓÒ²à£¬ÓÒÂÖ¼ÓËÙ
+ 128   2        }else if(youzong>zuozong)
+ 129   1        {
+ 130   2          //  dangqian_chazhi=(( uint16)(youzong-zuozong)*200)/(zuozong+youzong);                  
+ 131   2          c=1;//³µÔÚÅÜµÀ×ó²à£¬×óÂÖ¼ÓËÙ
+ 132   2          dangqian_chazhi=youzong-zuozong;
+ 133   2        }
+ 134   1        
+ 135   1      //  if(you_shuzong<zuo_shuzong)
+ 136   1      //  {  //ÅÐ¶Ï×óÓÒ·½Ïò                          
+ 137   1      //    // dangqian_chazhi=(( uint16)(zuozong-youzong)*200)/(zuozong+youzong);          //²î±ÈºÍ        
+ 138   1      //    dangqian_chazhi_shu=zuo_shuzong-you_shuzong;
+ 139   1      //    //  shu_c=0;//³µÔÚÅÜµÀÓÒ²à£¬ÓÒÂÖ¼ÓËÙ
+ 140   1      //  }
+ 141   1      //  else  
+ 142   1      //  {
+ 143   1      //    //  dangqian_chazhi=(( uint16)(youzong-zuozong)*200)/(zuozong+youzong);                  
+ 144   1      //    //  shu_c=1;//³µÔÚÅÜµÀ×ó²à£¬×óÂÖ¼ÓËÙ
+ 145   1      //    dangqian_chazhi_shu=you_shuzong-zuo_shuzong;
+ 146   1      //  }
+ 147   1        KEE=(dangqian_chazhi*200)/(youzong+zuozong);
+ 148   1      //  shu_KE=(dangqian_chazhi_shu*200)/(you_shuzong+zuo_shuzong);
+ 149   1        //KEEE=10*dangqian_chazhi_shu/dangqian_chazhi;
+ 150   1      //  if(shu_KE>=200) shu_KE=200;
+ 151   1        if(KEE>=200) KEE=200;
+ 152   1      }
+ 153          
+ 154          void Deeprom()
+ 155          {
+ 156   1        //´Óeeprom¶ÁÈ¡Êý¾Ý
+ 157   1         iap_read_bytes(0x00,GP,2);
+ 158   1         Gyro_Kp=GP[0];
+ 159   1         iap_read_bytes(0x02,GD,2);
+ 160   1         Gyro_Kd=GD[0];
+ 161   1         iap_read_bytes(0x04,AP,2);
+ 162   1         Angle_Kp=AP[0];
+ 163   1         iap_read_bytes(0x06,AD,2);
+ 164   1         Angle_Kd=AD[0];
+ 165   1         iap_read_bytes(0x08,DP,2);
+ 166   1         DIR_CONTROL_P=DP[0];
+ 167   1         iap_read_bytes(0x10,DD,2);
+ 168   1         DIR_CONTROL_D=DD[0];
+ 169   1        
+ 170   1      }
+ 171          void Xeeprom()
+ 172          {
+C51 COMPILER V9.57.0.0   MAIN                                                              07/17/2020 10:30:34 PAGE 4   
+
+ 173   1        //Ð´ÈëÊý¾Ýµ½eeprom
+ 174   1         GP[0]=Gyro_Kp;
+ 175   1         iap_write_bytes(0x00,GP,2);
+ 176   1         GD[0]=Gyro_Kd;
+ 177   1         iap_write_bytes(0x02,GD,2);
+ 178   1         AP[0]=Angle_Kp;
+ 179   1         iap_write_bytes(0x04,AP,2);
+ 180   1         AD[0]=Angle_Kd;
+ 181   1         iap_write_bytes(0x06,AD,2);
+ 182   1         DP[0]=DIR_CONTROL_P;
+ 183   1         iap_write_bytes(0x08,DP,2);
+ 184   1         DD[0]=DIR_CONTROL_D;
+ 185   1         iap_write_bytes(0x10,DD,2);
+ 186   1        
+ 187   1      }
+ 188          
+ 189          
+ 190          
+ 191          /*****°´¼ü¼ì²â¼°È¥¶¶*****/
+ 192          void key_press(bit key)
+ 193          {
+ 194   1        oled_fill(0x00);
+ 195   1        if(key==0)                //°´¼ü°´ÏÂ»áÓÐ6~10ms¶¶¶¯µçÆ½£¬20msÎÈ¶¨Ê±¼ä
+ 196   1        {                         //¼ì²âÊÇ·ñ°´ÏÂ£¬10msºóÔÙ´Î¼ì²â
+ 197   2          pca_delay_ms(10);
+ 198   2      //    if(key==0)
+ 199   2      //    { 
+ 200   2      //    }
+ 201   2          while(!key)          //°´¼üËÉ¿ª¼ì²â
+ 202   2          {
+ 203   3            oled_uint16(40, 2, key);
+ 204   3            oled_uint16(40, 3, up);
+ 205   3          }
+ 206   2        }
+ 207   1      }
+ 208          
+ 209          
+ 210          
+ 211          
+ 212          
+ 213          void AD_max_min()
+ 214          {
+ 215   1        oled_fill(0x00);
+ 216   1      /**********³õÊ¼½çÃæ**********/
+ 217   1          while(up)     
+ 218   1        {   
+ 219   2          AD_get();
+ 220   2          //½«½á¹ûÏÔÊ¾µ½TFTÉÏ
+ 221   2          oled_p6x8str(0,1,"star");
+ 222   2          oled_p6x8str(0,1,"left:");oled_uint16(40, 1, zuozong);
+ 223   2          oled_p6x8str(0,2,"right:");oled_uint16(40, 2, youzong);
+ 224   2          oled_p6x8str(0,3,"right:");oled_uint16(40, 3, youzong);
+ 225   2        }
+ 226   1         
+ 227   1        key_press(up);
+ 228   1        oled_fill(0x00);
+ 229   1        
+ 230   1      /**********»ñÈ¡µç¸Ð»ù×¼Öµ**********/  
+ 231   1        while(up)
+ 232   1        {
+ 233   2          oled_p6x8str(20,1,"if enter menu");
+ 234   2          oled_p6x8str(30,4,"yes");
+C51 COMPILER V9.57.0.0   MAIN                                                              07/17/2020 10:30:34 PAGE 5   
+
+ 235   2          oled_p6x8str(80,4,"no");
+ 236   2          if(left==0)
+ 237   2          {
+ 238   3            break;
+ 239   3          }
+ 240   2          if(right==0)
+ 241   2          {
+ 242   3            oled_fill(0x00);
+ 243   3            while(up)
+ 244   3            {   
+ 245   4              AD_get();
+ 246   4              //½«½á¹ûÏÔÊ¾µ½TFTÉÏ
+ 247   4              oled_uint16(0, 2, zuoADmax);
+ 248   4              oled_uint16(0, 3, youADmax);
+ 249   4          
+ 250   4      
+ 251   4              youADmax=youzong;
+ 252   4              zuoADmax=zuozong;
+ 253   4      
+ 254   4            }
+ 255   3            pca_delay_ms(10);
+ 256   3            while(!up);          //°´¼üËÉ¿ª¼ì²â
+ 257   3            oled_fill(0x00);
+ 258   3      
+ 259   3      
+ 260   3      
+ 261   3            while(up)
+ 262   3            {  
+ 263   4              if(left==0)
+ 264   4              {
+ 265   5                Gyro_Kp-=1;   
+ 266   5              }
+ 267   4              else if(right==0)
+ 268   4              {
+ 269   5                Gyro_Kp+=1; 
+ 270   5              }
+ 271   4              //oled_p6x8str(0,1,"Gp");oled_printf_float(30,1,Gyro_Kp,2,3);
+ 272   4              oled_p6x8str(0,1,"Gp");oled_int16(30,1,Gyro_Kp);
+ 273   4              pca_delay_ms(100);
+ 274   4            }
+ 275   3            pca_delay_ms(10);
+ 276   3            while(!up);          //°´¼üËÉ¿ª¼ì²â
+ 277   3            
+ 278   3            while(up)
+ 279   3            {   
+ 280   4              if(left==0)
+ 281   4              {
+ 282   5                Gyro_Kd-=1;   
+ 283   5              }
+ 284   4              else if(right==0)
+ 285   4              {
+ 286   5                Gyro_Kd+=1; 
+ 287   5              }
+ 288   4              //oled_p6x8str(0,2,"Gd");oled_printf_float(30,2,Gyro_Kd,2,3);
+ 289   4              oled_p6x8str(0,2,"Gd");oled_int16(30,2,Gyro_Kd);
+ 290   4              pca_delay_ms(100);
+ 291   4            }
+ 292   3            pca_delay_ms(10);
+ 293   3            while(!up);          //°´¼üËÉ¿ª¼ì²â
+ 294   3            
+ 295   3            while(up)
+ 296   3            {   
+C51 COMPILER V9.57.0.0   MAIN                                                              07/17/2020 10:30:34 PAGE 6   
+
+ 297   4              if(left==0)
+ 298   4              {
+ 299   5                Angle_Kp-=1;   
+ 300   5              }
+ 301   4              else if(right==0)
+ 302   4              {
+ 303   5                Angle_Kp+=1; 
+ 304   5              }
+ 305   4              //oled_p6x8str(0,3,"Ap");oled_printf_float(30,3,Angle_Kp,2,3);
+ 306   4              oled_p6x8str(0,3,"Ap");oled_int16(30,3,Angle_Kp);
+ 307   4              pca_delay_ms(100);
+ 308   4            }
+ 309   3            pca_delay_ms(10);
+ 310   3            while(!up);          //°´¼üËÉ¿ª¼ì²â
+ 311   3          
+ 312   3            while(up)
+ 313   3            {   
+ 314   4              if(left==0)
+ 315   4              {
+ 316   5                Angle_Kd-=2;   
+ 317   5              }
+ 318   4              else if(right==0)
+ 319   4              {
+ 320   5                Angle_Kd+=2; 
+ 321   5              }
+ 322   4              //oled_p6x8str(0,4,"Ad");oled_printf_float(30,4,Angle_Kd,2,3);
+ 323   4              oled_p6x8str(0,4,"Ad");oled_int16(30,4,Angle_Kd);
+ 324   4              pca_delay_ms(100);
+ 325   4            }
+ 326   3            pca_delay_ms(10);
+ 327   3            while(!up);          //°´¼üËÉ¿ª¼ì²â
+ 328   3            
+ 329   3            while(up)
+ 330   3            {       
+ 331   4              if(left==0)
+ 332   4              {
+ 333   5                DIR_CONTROL_P-=1;   
+ 334   5              }
+ 335   4              else if(right==0)
+ 336   4              {
+ 337   5                DIR_CONTROL_P+=1; 
+ 338   5              }
+ 339   4              //oled_p6x8str(0,1,"Gp");oled_printf_float(30,1,Gyro_Kp,2,3);
+ 340   4              oled_p6x8str(0,5,"DP");oled_int16(30,5,DIR_CONTROL_P);
+ 341   4              pca_delay_ms(100);
+ 342   4            }
+ 343   3            pca_delay_ms(10);
+ 344   3            while(!up);          //°´¼üËÉ¿ª¼ì²â
+ 345   3            
+ 346   3            
+ 347   3            while(up)
+ 348   3            {   
+ 349   4              if(left==0)
+ 350   4              {
+ 351   5                DIR_CONTROL_D-=1;   
+ 352   5              }
+ 353   4              else if(right==0)
+ 354   4              {
+ 355   5                DIR_CONTROL_D+=1; 
+ 356   5              }
+ 357   4              //oled_p6x8str(0,2,"Gd");oled_printf_float(30,2,Gyro_Kd,2,3);
+ 358   4              oled_p6x8str(0,6,"DD");oled_int16(30,6,DIR_CONTROL_D);
+C51 COMPILER V9.57.0.0   MAIN                                                              07/17/2020 10:30:34 PAGE 7   
+
+ 359   4              pca_delay_ms(100);
+ 360   4            }
+ 361   3            pca_delay_ms(10);
+ 362   3            while(!up);          //°´¼üËÉ¿ª¼ì²â
+ 363   3            iap_erase_page(0X20);
+ 364   3            Xeeprom();
+ 365   3            pca_delay_ms(100);
+ 366   3            oled_printf_int32(30,5,3,5);
+ 367   3            pca_delay_ms(1000);
+ 368   3            oled_printf_int32(30,5,2,5);
+ 369   3            pca_delay_ms(1000);
+ 370   3            oled_printf_int32(30,5,1,5);
+ 371   3            pca_delay_ms(1000);
+ 372   3            oled_printf_int32(30,5,0,5);
+ 373   3            oled_fill(0x00);
+ 374   3          }
+ 375   2        }
+ 376   1        oled_fill(0x00);
+ 377   1      }
+ 378          void get_mpu6050()
+ 379          {
+ 380   1        mpu6050_get_accdata();
+ 381   1        mpu6050_get_gyro();  
+ 382   1      }
+ 383          void Yijielvbo(float angle_m, float gyro_m)
+ 384          {
+ 385   1         angle = K1 * angle_m+ (1-K1) * (angle + gyro_m * 0.005);
+ 386   1      }
+ 387          
+ 388          void Get_Angle()
+ 389          { 
+ 390   1      
+ 391   1        Gyro_Y=mpu_gyro_y;
+ 392   1        Gyro_Z=mpu_gyro_z;
+ 393   1        Accel_X=mpu_acc_x;
+ 394   1        Accel_Z=mpu_acc_z;
+ 395   1        //Gyro_Z  = Gyro[2] ;
+ 396   1        //Accel_X = Accel[0];
+ 397   1        //Accel_Z = Accel[2];
+ 398   1        if(Gyro_Y>32768)  Gyro_Y-=65536;                       //
+ 399   1        if(Gyro_Z>32768)  Gyro_Z-=65536;                       //
+ 400   1        if(Accel_X>32768) Accel_X-=65536;                      //
+ 401   1        if(Accel_Z>32768) Accel_Z-=65536;                      //
+ 402   1        Gyro_Balance=-Gyro_Y;                                  //
+ 403   1        Accel_Y=(atan2(Accel_X,Accel_Z)*180/PI);               //
+ 404   1        Gyro_Y=Gyro_Y/16.4;                                    // 
+ 405   1        Gyro_Z=Gyro_Z/16.4;
+ 406   1         Yijielvbo(Accel_Y,-Gyro_Y);
+ 407   1        Angle_Balance=angle;  
+ 408   1        Gyro_Turn=Gyro_Z;                                      //
+ 409   1        Acceleration_Z=Accel_Z; //
+ 410   1      }
+ 411          
+ 412          void AngleControl()
+ 413          {
+ 414   1        static float fValue=0;
+ 415   1        fValue = angle-12.5;//  ¿´ÆÁÄ»ÉÏµÄÒ»¶þÐÐ¸Ä±ä³µÉí½Ç¶È´Ë²ÎÊýÒ²Òª¸Ä±ä
+ 416   1        AngleControlOut = (fValue)*Angle_Kp + -Gyro_Y*Angle_Kd/1000; 
+ 417   1      }
+ 418          void GyroControl()
+ 419          {
+ 420   1        Gyro_error = -Gyro_Y+AngleControlOut;
+C51 COMPILER V9.57.0.0   MAIN                                                              07/17/2020 10:30:34 PAGE 8   
+
+ 421   1        Gyro_Ingter += Gyro_error; 
+ 422   1        if(Gyro_Ingter>1000)    Gyro_Ingter=1000;
+ 423   1        if(Gyro_Ingter<-1000)   Gyro_Ingter=-1000;  
+ 424   1        GyroControlOut = Gyro_Kp/-100*Gyro_error + Gyro_Ki*Gyro_Ingter + Gyro_Kd/-100*(Gyro_error-Last_error); 
+ 425   1        Prev_error = Last_error;
+ 426   1        Last_error = Gyro_error;
+ 427   1      }
+ 428          void CalSpeedError(void)
+ 429          {
+ 430   1        static float fSpeedOld = 0, fSpeedNew = 0;
+ 431   1        int16 temp_l=0,temp_r=0;
+ 432   1       
+ 433   1        //¶ÁÈ¡²É¼¯µ½µÄ±àÂëÆ÷Âö³åÊý
+ 434   1        temp_l = ctimer_count_read(SPEEDL_PIN);
+ 435   1        temp_r = ctimer_count_read(SPEEDR_PIN);
+ 436   1          
+ 437   1        //¼ÆÊýÆ÷ÇåÁã
+ 438   1        ctimer_count_clean(SPEEDL_PIN);
+ 439   1        ctimer_count_clean(SPEEDR_PIN);
+ 440   1        
+ 441   1        //²É¼¯·½ÏòÐÅÏ¢
+ 442   1      //  if(1==SPEEDL_DIR)          
+ 443   1        g_nLeftSpeed = temp_l;
+ 444   1        //else                        g_nLeftSpeed = -temp_l;
+ 445   1      //  if(1==SPEEDR_DIR)           
+ 446   1        g_nRighSpeed = temp_r;
+ 447   1      //  else                        g_nRighSpeed = -temp_r;
+ 448   1        
+ 449   1        g_fLeftRealSpeed = g_nLeftSpeed*Ratio_Encoder_Left;
+ 450   1        g_fLeftRealSpeed = (g_fLeftRealSpeed>4000?4000:g_fLeftRealSpeed);   //ÂË×ó±àÂëÆ÷µÄÔëÉù
+ 451   1        g_fRighRealSpeed = g_nRighSpeed*Ratio_Encoder_Righ;
+ 452   1        g_fRighRealSpeed = (g_fRighRealSpeed>4000?4000:g_fRighRealSpeed);   //ÂËÓÒ±àÂëÆ÷µÄÔëÉù
+ 453   1        
+ 454   1        g_fRealSpeed = (g_fLeftRealSpeed + g_fRighRealSpeed)*0.5;       //ÕæÊµËÙ¶È
+ 455   1        //ËÙ¶È²É¼¯ÌÝ¶ÈÆ½»¬£¬Ã¿´Î²É¼¯×î´ó±ä»¯200
+ 456   1        fSpeedOld = g_fSpeedFilter;
+ 457   1        //g_fSpeedFilter = g_fRealSpeed;
+ 458   1        fSpeedNew = g_fRealSpeed;
+ 459   1        
+ 460   1        if(fSpeedNew>=fSpeedOld)
+ 461   1          g_fSpeedFilter = ((fSpeedNew-fSpeedOld)>400?(fSpeedOld+400):fSpeedNew);
+ 462   1        else
+ 463   1          g_fSpeedFilter = ((fSpeedNew-fSpeedOld)<-400?(fSpeedOld-400):fSpeedNew);
+ 464   1        
+ 465   1        g_fSpeedError = g_fExpectSpeed - g_fSpeedFilter;
+ 466   1        g_fSpeedErrorTemp[4] = g_fSpeedErrorTemp[3];
+ 467   1        g_fSpeedErrorTemp[3] = g_fSpeedErrorTemp[2];
+ 468   1        g_fSpeedErrorTemp[2] = g_fSpeedErrorTemp[1];
+ 469   1        g_fSpeedErrorTemp[1] = g_fSpeedErrorTemp[0];
+ 470   1        g_fSpeedErrorTemp[0] = g_fSpeedError;
+ 471   1        
+ 472   1        //        lcd_showstr(0,1,"LS:");  lcd_showint32(3*8,1,g_nLeftSpeed,9);
+ 473   1        //        lcd_showstr(0,2,"RS:");  lcd_showint32(3*8,2,g_nRighSpeed,9);
+ 474   1        //  lcd_showstr(0,3,"LrS:");  lcd_showint32(3*8,3,g_fLeftRealSpeed,9);
+ 475   1        //        lcd_showstr(0,4,"RrS:");  lcd_showint32(3*8,4,g_fRighRealSpeed,9);
+ 476   1        //        lcd_showstr(0,5,"RS:");  lcd_showint32(3*8,5,g_fRealSpeed,9);
+ 477   1        //        lcd_showstr(0,1,"LS:");  lcd_showint32(3*8,6,g_nLeftSpeed,9);
+ 478   1      //  oled_printf_int32(0,1,g_nLeftSpeed,5);
+ 479   1      //  oled_printf_int32(0,2,g_nRighSpeed,5);  
+ 480   1      }
+ 481          void SpeedControl(void)
+ 482          {
+C51 COMPILER V9.57.0.0   MAIN                                                              07/17/2020 10:30:34 PAGE 9   
+
+ 483   1        //  static float fSpeedErrorDot = 0;
+ 484   1        CalSpeedError();
+ 485   1        // g_fSpeedError = (g_fSpeedError>800?800:g_fSpeedError);
+ 486   1        //  if(Flag_OpenStart == 1){g_fSpeedError = (g_fSpeedError>1300?1300:g_fSpeedError);}//ÆðÅÜËÙ¶ÈÆ«²îÏÞ·ù
+ 487   1        //  else g_fSpeedError = (g_fSpeedError>800?800:g_fSpeedError);//ËÙ¶ÈÆ«²îÏÞ·ù
+ 488   1        //  //¶¯Ì¬ÆÚÍûËÙ¶È
+ 489   1        //  g_fExpectSpeed = 2200 + g_fSpeedError/6;          //³¬2.9¼õËÙ
+ 490   1        //  g_fExpectSpeed = (g_fExpectSpeed>2800?2800:g_fExpectSpeed);
+ 491   1        //  g_fExpectSpeed = (g_fExpectSpeed<1800?1800:g_fExpectSpeed);
+ 492   1        
+ 493   1        fSpeedErrorInteg += (g_speedControl_I/100.0) * g_fSpeedError;
+ 494   1        //if(Flag_Stop==1|Flag_Speed==1)fSpeedErrorInteg = 0;   //Í£³µ»ý·ÖÇåÁã
+ 495   1        
+ 496   1        fSpeedErrorInteg = (fSpeedErrorInteg < 0.0? 0.0: fSpeedErrorInteg);//»ý·ÖÏÂÏÞ
+ 497   1        fSpeedErrorInteg = (fSpeedErrorInteg > 50.0? 50.0: fSpeedErrorInteg);//»ý·ÖÉÏÏÞ
+ 498   1        
+ 499   1        g_fSpeedControlOutOld = g_fSpeedControlOutNew;
+ 500   1        g_fSpeedControlOutNew = (g_speedControl_P/100.0)*g_fSpeedError +fSpeedErrorInteg+ g_speedControl_D*(g_fS
+             -peedErrorTemp[0]-g_fSpeedErrorTemp[1]);
+ 501   1        // g_fSpeedControlOutNew = (g_fSpeedControlOutNew>800?800:g_fSpeedControlOutNew);
+ 502   1      }
+ 503          //ËÙ¶ÈÆ½»¬Êä³ö
+ 504          void SpeedControlOut(void)
+ 505          {
+ 506   1        g_fSpeedControlOut = (g_fSpeedControlOutNew - g_fSpeedControlOutOld)*Flag_SpeedControl/20 + g_fSpeedCont
+             -rolOutOld;  
+ 507   1      }
+ 508          //È·¶¨»úÐµÖ±Á¢½Ç¶È
+ 509          //void balance()
+ 510          //{
+ 511          //    static float fValue=0;
+ 512          //  fValue = angle-135;//  fValue¼õÐ¡ ÏòÇ°
+ 513          //  balanceControlOut = (fValue)*balance_Kp + angle_dot*balance_Kd; 
+ 514          //}
+ 515          //½áÊø
+ 516          void DirectionControl(void) 
+ 517          {
+ 518   1        int16 nLeft, nRight;
+ 519   1        // static int16 Ke[5];
+ 520   1        AD_chuli();
+ 521   1        g_fLeftVoltageSigma = zuozong;
+ 522   1        g_fRightVoltageSigma = youzong;
+ 523   1        
+ 524   1        nLeft = (int16)(g_fLeftVoltageSigma );     
+ 525   1        nRight = (int16)(g_fRightVoltageSigma );
+ 526   1        
+ 527   1        dangqian_he=nLeft+ nRight;
+ 528   1        
+ 529   1        g_fLeftVoltageSigma = 0;
+ 530   1        g_fRightVoltageSigma = 0;
+ 531   1        
+ 532   1        
+ 533   1        if(( nLeft>10||nRight>10))
+ 534   1        {
+ 535   2          fLeftRightAdd = nLeft+ nRight;
+ 536   2          fLeftRightSub = dangqian_chazhi;
+ 537   2          
+ 538   2          if( canshu[2]==1)
+ 539   2          { 
+ 540   3            if((nLeft>=40)&&( nRight>=40))
+ 541   3            {
+ 542   4              canshu[2]=0;
+C51 COMPILER V9.57.0.0   MAIN                                                              07/17/2020 10:30:34 PAGE 10  
+
+ 543   4            }
+ 544   3            if(fLeftRightAdd==0)fLeftRightAdd+=1;
+ 545   3            KE= ( canshu[1] *200 )/ fLeftRightAdd;
+ 546   3            
+ 547   3          }
+ 548   2          else if(fLeftRightSub<fLeftRightAdd )  
+ 549   2          { 
+ 550   3            KE= fLeftRightSub;
+ 551   3            canshu[0] =c;
+ 552   3            canshu[1] =fLeftRightSub;
+ 553   3            
+ 554   3          } 
+ 555   2          else
+ 556   2          {
+ 557   3            canshu[2] =1;
+ 558   3            
+ 559   3            KE= ( canshu[1] *200 )/ fLeftRightAdd+1;
+ 560   3          }
+ 561   2          if(KE>=200) KE=200;
+ 562   2          if(KE<=0) KE=0;
+ 563   2          
+ 564   2          if(KE<300) 
+ 565   2          {
+ 566   3            D_1=KE/10;
+ 567   3            D_3=D_2+D_1;
+ 568   3          }
+ 569   2          
+ 570   2          
+ 571   2          D_now= D_last- KE;
+ 572   2          
+ 573   2          if(c==0)
+ 574   2          {
+ 575   3            fValue = KE * DIR_CONTROL_P+ DIR_CONTROL_D* D_now;
+ 576   3            fValue_last=fValue;
+ 577   3          }
+ 578   2          else
+ 579   2          {
+ 580   3            
+ 581   3            fValue = KE * DIR_CONTROL_P+DIR_CONTROL_D* D_now;
+ 582   3            fValue_last=fValue;
+ 583   3            fValue=- fValue;
+ 584   3          }  
+ 585   2          
+ 586   2          D_last2=shu_KE;
+ 587   2          D_last=KE;
+ 588   2          D_2=D_1;
+ 589   2          nLeft_last=nLeft;
+ 590   2          nRight_last=nRight;
+ 591   2          zuo_shuzong_last=zuo_shuzong;
+ 592   2          you_shuzong_last=you_shuzong;
+ 593   2          
+ 594   2          fLeftRightSub_last =fLeftRightSub;
+ 595   2          if(fValue > 9000) fValue = 9000;
+ 596   2          if(fValue < -9000) fValue = -9000;
+ 597   2          
+ 598   2      //    if((zuozong<=50||youzong<=50)) 
+ 599   2      //    {
+ 600   2      //       Dir2P=70;
+ 601   2      //       DIR_CONTROL_P=Dir2P;
+ 602   2      //    }
+ 603   2        } 
+ 604   1        
+C51 COMPILER V9.57.0.0   MAIN                                                              07/17/2020 10:30:34 PAGE 11  
+
+ 605   1        g_fDirectionControlOut =fValue;
+ 606   1        
+ 607   1      }
+ 608          void PWMOut(void)
+ 609          {
+ 610   1        float g_nLeftPWM, g_nRighPWM;
+ 611   1          g_fSpeed=(g_nLeftSpeed+g_nRighSpeed)/2;
+ 612   1          g_fSpeedF+=g_fSpeed;
+ 613   1        g_PWMOut = 45*GyroControlOut; 
+ 614   1         if(Direction_falg==0)
+ 615   1          {
+ 616   2            
+ 617   2            if(g_fDirectionControlOut>=0)
+ 618   2            {
+ 619   3              g_nLeftPWM = 10*g_PWMOut - 3*g_fDirectionControlOut;
+ 620   3              g_nRighPWM = 10*g_PWMOut + 1*g_fDirectionControlOut; 
+ 621   3            }
+ 622   2            if(g_fDirectionControlOut<0)
+ 623   2            {
+ 624   3              g_nLeftPWM = 10*g_PWMOut - 1*g_fDirectionControlOut;
+ 625   3              g_nRighPWM =10*g_PWMOut + 3*g_fDirectionControlOut;
+ 626   3            }
+ 627   2            
+ 628   2          }
+ 629   1      
+ 630   1        speedl_power=g_nLeftPWM;
+ 631   1        speedr_power=g_nRighPWM;
+ 632   1        if(0<=speedl_power) //×óµç»ú   Ç°×ª ÉèÖÃÕ¼¿Õ±ÈÎª °Ù·ÖÖ® (1000/TIMER1_PWM_DUTY_MAX*100)
+ 633   1          {
+ 634   2            speedl_power = (speedl_power > 10000? 10000: speedl_power);
+ 635   2            pwm_duty(PWM2_P26, speedl_power);
+ 636   2            pwm_duty(PWM2_P27, 0);
+ 637   2          }
+ 638   1        else                //×óµç»ú   ºó×ª
+ 639   1          {
+ 640   2            speedl_power=0-speedl_power;
+ 641   2            speedl_power = (speedl_power > 10000? 10000: speedl_power);
+ 642   2            pwm_duty(PWM2_P26, 0);
+ 643   2            pwm_duty(PWM2_P27, speedl_power);
+ 644   2            
+ 645   2          }
+ 646   1          
+ 647   1        if(0<=speedr_power) //ÓÒµç»ú   Ç°×ª
+ 648   1          {
+ 649   2            speedr_power = (speedr_power > 10000? 10000: speedr_power);
+ 650   2            pwm_duty(PWM4_P45, 0);
+ 651   2            pwm_duty(PWM4_P46, speedr_power);
+ 652   2          }
+ 653   1          else                //ÓÒµç»ú   ºó×ª
+ 654   1          {
+ 655   2            speedr_power=0-speedr_power;
+ 656   2            speedr_power = (speedr_power > 10000? 10000: speedr_power);
+ 657   2            pwm_duty(PWM4_P45, speedr_power);
+ 658   2            pwm_duty(PWM4_P46, 0);
+ 659   2          } 
+ 660   1      }
+ 661          void PCA_Isr() interrupt 7
+ 662          {
+ 663   1        static uint8 flag_getmpu6050;
+ 664   1        static uint8 flag_balance;
+ 665   1        static uint8 flag_speed;
+ 666   1        static uint8 flag_DirectionControl;
+C51 COMPILER V9.57.0.0   MAIN                                                              07/17/2020 10:30:34 PAGE 12  
+
+ 667   1        if(PCA0_GET_FLAG)
+ 668   1        {
+ 669   2          //Çå³ýÖÐ¶Ï±êÖ¾Î»
+ 670   2          PCA_CLEAR_FLAG(PCA_0);  
+ 671   2      
+ 672   2          //ÖØÔØ¼ÆÊýÆ÷
+ 673   2          pca_reload_counter(PCA_0);
+ 674   2         
+ 675   2         if(++flag_getmpu6050>=1)
+ 676   2         {
+ 677   3          get_mpu6050();
+ 678   3          Get_Angle();
+ 679   3          GyroControl();
+ 680   3         }
+ 681   2         if(++flag_balance>=2)
+ 682   2         {
+ 683   3          AngleControl();
+ 684   3         // balance();
+ 685   3           PWMOut();
+ 686   3           flag_balance=0;
+ 687   3         }
+ 688   2         if(++flag_speed>=3)
+ 689   2         {
+ 690   3          Flag_SpeedControl++;
+ 691   3          if(Flag_SpeedControl >= 20)
+ 692   3          {
+ 693   4            SpeedControl();
+ 694   4            Flag_SpeedControl = 0;
+ 695   4          }
+ 696   3          SpeedControlOut();
+ 697   3          flag_speed=0;
+ 698   3      
+ 699   3         }
+ 700   2          if(++flag_DirectionControl>=4)
+ 701   2          {
+ 702   3          AD_get();
+ 703   3        //  DirectionControl(); 
+ 704   3            flag_DirectionControl=0;
+ 705   3          }
+ 706   2        
+ 707   2      }
+ 708   1          }
+ 709          
+ 710          void main()
+ 711          {
+ 712   1      
+ 713   1        DisableGlobalIRQ(); //¹Ø±Õ×ÜÖÐ¶Ï
+ 714   1      
+ 715   1        board_init();   //³õÊ¼»¯ÄÚ²¿¼Ä´æÆ÷
+ 716   1        NVIC_SetPriority(UART3_IRQn, 3);
+ 717   1        NVIC_SetPriority(PWM2_IRQn, 0);
+ 718   1        NVIC_SetPriority(IIC_IRQn, 2);
+ 719   1        NVIC_SetPriority(CCP_PCA_PWM_IRQn,1);
+ 720   1        adc_init(ADC_P11, 0); //³õÊ¼»¯ADC,P1.0Í¨µÀ £¬ADCÊ±ÖÓÆµÂÊ£ºSYSclk/2/1
+ 721   1        adc_init(ADC_P12, 0); //³õÊ¼»¯ADC,P1.1Í¨µÀ £¬ADCÊ±ÖÓÆµÂÊ£ºSYSclk/2/1
+ 722   1        
+ 723   1        oled_init();
+ 724   1        iap_init();
+ 725   1      
+ 726   1        ctimer_count_init(CTIM3_P04); 
+ 727   1        ctimer_count_init(CTIM4_P06);
+ 728   1      
+C51 COMPILER V9.57.0.0   MAIN                                                              07/17/2020 10:30:34 PAGE 13  
+
+ 729   1        AD_max_min();
+ 730   1      
+ 731   1        
+ 732   1        pwm_init(PWM2_P26, 15000, 0);//×óÇ°
+ 733   1        pwm_init(PWM2_P27, 15000, 0);//×óºó
+ 734   1        pwm_init(PWM4_P46, 15000, 0);//ÓÒÇ°
+ 735   1        pwm_init(PWM4_P45, 15000, 0);//ÓÒºó
+ 736   1        simiic_init();
+ 737   1        mpu6050_init();
+ 738   1        pca_delay_ms(10);
+ 739   1        pca_init_interrupt_ms(PCA_0,1); //Ê¹ÓÃPCA_0×÷ÎªÖÜÆÚÖÐ¶Ï£¬Ê±¼ä1msÒ»´Î
+ 740   1        EnableGlobalIRQ();  //¿ªÆô×ÜÖÐ¶Ï
+ 741   1          while(1)
+ 742   1        {       
+ 743   2         P40=0;
+ 744   2      
+ 745   2          oled_p6x8str(30,0,"car");
+ 746   2          
+ 747   2          oled_printf_int32(0,1,Accel_Y,5);
+ 748   2          oled_printf_int32(0,2,angle,5);
+ 749   2          oled_printf_int32(0,3,zuozong,5);
+ 750   2          oled_printf_int32(0,4,youzong,5);
+ 751   2          oled_printf_int32(0,5,speedl_power,5);
+ 752   2          
+ 753   2          oled_printf_int32(0,6,speedr_power,5);
+ 754   2          oled_printf_int32(0,7,g_fDirectionControlOut,5);
+ 755   2      
+ 756   2      
+ 757   2          pca_delay_ms(10);
+ 758   2          if(mid==0)
+ 759   2          {
+ 760   3            DisableGlobalIRQ(); //¹Ø±Õ×ÜÖÐ¶Ï
+ 761   3            AD_max_min();
+ 762   3            EnableGlobalIRQ();  //¿ªÆô×ÜÖÐ¶Ï
+ 763   3          }
+ 764   2      
+ 765   2         }
+ 766   1      
+ 767   1      
+ 768   1        }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =   6856    ----
+   CONSTANT SIZE    =     61    ----
+   XDATA SIZE       =    450      24
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----       1
+   EDATA SIZE       =   ----    ----
+   HDATA SIZE       =   ----    ----
+   XDATA CONST SIZE =   ----    ----
+   FAR CONST SIZE   =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

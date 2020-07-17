@@ -1,0 +1,141 @@
+C51 COMPILER V9.57.0.0   SEEKFREE_TSL1401                                                  07/17/2020 10:29:37 PAGE 1   
+
+
+C51 COMPILER V9.57.0.0, COMPILATION OF MODULE SEEKFREE_TSL1401
+OBJECT MODULE PLACED IN .\Out_File\SEEKFREE_TSL1401.obj
+COMPILER INVOKED BY: C:\Keil_v5\C51\BIN\C51.EXE ..\..\Libraries\seekfree_peripheral\SEEKFREE_TSL1401.c LARGE OMF2 OPTIMI
+                    -ZE(8,SPEED) INCDIR(..\..\Libraries\libraries;..\..\Libraries\seekfree_libraries;..\..\Libraries\seekfree_peripheral;..\U
+                    -SER\inc;..\USER\src;..\CODE) PRINT(.\Out_File\SEEKFREE_TSL1401.lst) TABS(2) OBJECT(.\Out_File\SEEKFREE_TSL1401.obj)
+
+line level    source
+
+   1          /*********************************************************************************************************
+             -************
+   2           * COPYRIGHT NOTICE
+   3           * Copyright (c) 2016,逐飞科技
+   4           * All rights reserved.
+   5           * 技术讨论QQ群：179029047
+   6           *
+   7           * 以下所有内容版权均属逐飞科技所有，未经允许不得用于商业用途，
+   8           * 欢迎各位使用并传播本程序，修改内容时必须保留逐飞科技的版权声明。
+   9           *
+  10           * @file          SEEKFREE_TSL1401.c
+  11           * @brief         红孩儿(线阵CCD)函数库
+  12           * @company       成都逐飞科技有限公司
+  13           * @author        Go For It(1325536866)
+  14           * @version       v1.0
+  15           * @Software    IAR 7.2 or MDK 5.17
+  16           * @Target core   MK60DN512VLL10
+  17           * @Taobao      https://seekfree.taobao.com/
+  18           * @date          2016-02-25
+  19           * @note  
+  20                    TSL1401接线定义：
+  21                    ------------------------------------ 
+  22                        模块管脚        单片机管脚
+  23                        CCD_AO        查看SEEKFREE_TSL1401.h文件中的AD_CHANNEL 宏定义
+  24                        CCD_CLK       查看SEEKFREE_TSL1401.h文件中的CCD_CLK_PIN宏定义
+  25                        CCD_SI        查看SEEKFREE_TSL1401.h文件中的CCD_SI_PIN 宏定义
+  26                    ------------------------------------ 
+  27           *********************************************************************************************************
+             -***********/
+  28          
+  29          
+  30          
+  31          #include "SEEKFREE_TSL1401.h"
+  32          #include "zf_adc.h"
+  33          #include "zf_pca_pit.h"
+  34          
+  35          uint8 tsl1401_finish_flag;
+  36          uint16 ccd_data[128];                           //CCD数据
+  37          
+  38          //--------------------------------------------------------------------------------------------------------
+             ------------
+  39          //  @brief      TSL1401线阵CCD初始化
+  40          //  @param      NULL
+  41          //  @return     void
+  42          //  @since      v1.0
+  43          //  Sample usage:     
+  44          //--------------------------------------------------------------------------------------------------------
+             ------------
+  45          void ccd_init(void)     
+  46          {       
+  47   1          adc_init(AD_CHANNEL, 0X1);        
+  48   1        pca_init_interrupt_ms(PCA_0, EXPOSURE_TIME);
+  49   1      }
+C51 COMPILER V9.57.0.0   SEEKFREE_TSL1401                                                  07/17/2020 10:29:37 PAGE 2   
+
+  50          
+  51          //--------------------------------------------------------------------------------------------------------
+             ------------
+  52          //  @brief      TSL1401线阵CCD图像发送至上位机查看图像
+  53          //  @param      uart_n      串口号
+  54          //  @param      uart_n      线性CCD数据指针
+  55          //  @return     void      
+  56          //  @since      v1.0
+  57          //  Sample usage:       调用该函数前请先初始化串口
+  58          //--------------------------------------------------------------------------------------------------------
+             ------------
+  59          void ccd_send_data(UARTN_enum uart_n ,uint16 *dat)
+  60          {
+  61   1         uint8 i = 0;
+  62   1         uart_putchar(uart_n, 0x00); 
+  63   1         uart_putchar(uart_n, 0xff);
+  64   1         uart_putchar(uart_n, 0x01);
+  65   1         uart_putchar(uart_n, 0x00);
+  66   1         
+  67   1        for(i=0; i<128; i++)        
+  68   1        {
+  69   2          uart_putchar(uart_n, (uint8)dat[i]>>8);   //发送高8位
+  70   2          uart_putchar(uart_n, (uint8)dat[i]&0XFF); //发送高低8位                 
+  71   2        }
+  72   1      }
+  73          
+  74          
+  75          //--------------------------------------------------------------------------------------------------------
+             ------------
+  76          //  @brief      TSL1401线阵CCD数据采集
+  77          //  @param      NULL
+  78          //  @return     void
+  79          //  @since      v1.0
+  80          //  Sample usage:       在isr.c里面先创建对应的中断函数，然后调用该函数(之后别忘记�
+             -��除中断标志位)
+  81          //--------------------------------------------------------------------------------------------------------
+             ------------
+  82          void ccd_collect(void)
+  83          {
+  84   1          uint8 i = 0;
+  85   1      
+  86   1          CCD_CLK(1);
+  87   1          CCD_SI(0);
+  88   1        CCD_CLK(0);
+  89   1          CCD_SI(1);
+  90   1          CCD_CLK(1);
+  91   1          CCD_SI(0);
+  92   1        
+  93   1          for(i=0;i<128;i++)
+  94   1          {
+  95   2          CCD_CLK(0);  
+  96   2          ccd_data[i] = adc_once(AD_CHANNEL, ADC_10BIT); 
+  97   2          CCD_CLK(1); 
+  98   2          }
+  99   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    225    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =    257       6
+   PDATA SIZE       =   ----    ----
+C51 COMPILER V9.57.0.0   SEEKFREE_TSL1401                                                  07/17/2020 10:29:37 PAGE 3   
+
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+   EDATA SIZE       =   ----    ----
+   HDATA SIZE       =   ----    ----
+   XDATA CONST SIZE =   ----    ----
+   FAR CONST SIZE   =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)
